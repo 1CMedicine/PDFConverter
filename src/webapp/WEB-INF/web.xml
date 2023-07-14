@@ -1,0 +1,20 @@
+<!DOCTYPE web-app PUBLIC
+ "-//Sun Microsystems, Inc.//DTD Web Application 2.3//EN"
+ "http://java.sun.com/dtd/web-app_2_3.dtd" >
+
+<web-app>
+  <display-name>PDF Converter</display-name>
+  <servlet>
+    <servlet-name>PDFConverter</servlet-name>
+    <servlet-class>PDFConverter</servlet-class>
+       <init-param> 
+          <param-name>DATA_PATH</param-name> 
+          <param-value>/var/www/upload/PDFConverter</param-value> 
+       </init-param> 
+    </servlet>
+
+  <servlet-mapping>
+    <servlet-name>PDFConverter</servlet-name>
+    <url-pattern>/</url-pattern>
+  </servlet-mapping>
+</web-app>
