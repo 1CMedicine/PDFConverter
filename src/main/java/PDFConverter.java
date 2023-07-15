@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Random;
+import java.util.logging.Level;
 
 import java.io.OutputStream;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
@@ -25,7 +26,6 @@ import com.openhtmltopdf.util.*;
 
 import org.jsoup.Jsoup;
 import org.jsoup.helper.W3CDom;
-
 
 public class PDFConverter extends HttpServlet {
 
@@ -64,7 +64,7 @@ public class PDFConverter extends HttpServlet {
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) 
             throws ServletException, IOException {
 
-        if (req.getServletPath().startsWith("/send_file.html")) { 
+        if (req.getServletPath().equals("/send_file.html")) { 
             log.info(req.getServletPath());
             send_file(req.getContextPath(), resp);
         } else if (req.getServletPath().startsWith("/log_") && req.getServletPath().length() == logKeyLength+5) { 
@@ -96,7 +96,7 @@ public class PDFConverter extends HttpServlet {
             XRLog.setLoggingEnabled(true);
             List<Diagnostic> l = lastLog.get(logging);
             if (l == null) {
-                l = new ArrayList<>();
+                l = new ArrayList<Diagnostic>();
                 lastLog.put(logging, l);
             } else {
                 l.clear();
@@ -135,7 +135,10 @@ public class PDFConverter extends HttpServlet {
             builder.useColorProfile(colorProfileBytes);
         }
         builder.toStream(output);
-        builder.run();
+        try {
+            builder.run();
+        } catch (XRRuntimeException ex) {   // исключение попадает в диагностику
+        }
         output.close();
     }
 
@@ -169,7 +172,10 @@ public class PDFConverter extends HttpServlet {
             builder.useColorProfile(colorProfileBytes);
         }
         builder.toStream(output);
-        builder.run();
+        try {
+            builder.run();
+        } catch (XRRuntimeException ex) {   // исключение попадает в диагностику
+        }
         output.close();
     }
 
@@ -245,7 +251,7 @@ public class PDFConverter extends HttpServlet {
             out.print("<p>Логирование выключено</p>");
         } else {
             for (Diagnostic diag : l) {
-                if (diag.getLevel() != java.util.logging.Level.FINEST && diag.getLevel() != java.util.logging.Level.FINER) {
+                if (diag.getLevel() != Level.FINEST && diag.getLevel() != Level.FINER) {
                     out.print(diag.getLevel());
                     out.print(" ");
                     out.print(diag.getFormattedMessage());
