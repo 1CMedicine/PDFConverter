@@ -81,10 +81,10 @@ public class PDFConverter extends HttpServlet {
             throws ServletException, IOException {
         if (req.getServletPath().equals("/convertHtml5")) { 
             log.info(req.getServletPath());
-            convertHtml5(req, resp);
+            convertHtml(req, resp, false);
         } else if (req.getServletPath().equals("/convertStrictHtml")) { 
             log.info(req.getServletPath());
-            convertStrictHtml(req, resp);
+            convertHtml(req, resp, true);
         } else {
             log.warn("PAGE NOT FOUND: "+req.getServletPath());
             resp.sendError(HttpServletResponse.SC_NOT_FOUND);
@@ -107,14 +107,14 @@ public class PDFConverter extends HttpServlet {
         }
     }
 
-    private void convertStrictHtml(HttpServletRequest req, HttpServletResponse resp) 
+    private void convertHtml(HttpServletRequest req, HttpServletResponse resp, boolean strict) 
             throws IOException, ServletException {
 
         if (req.getContentType() != null && req.getContentType().startsWith("multipart/form-data")) {
             req.setAttribute(Request.MULTIPART_CONFIG_ELEMENT, MULTI_PART_CONFIG);
         }
         Part filePart = req.getPart("file");
-        final String logging = req.getParameter("logging"); 
+        final String loggingKey = req.getParameter("logging"); 
         InputStream fileContent = filePart.getInputStream();
 
         resp.setContentType("application/pdf");
@@ -122,56 +122,24 @@ public class PDFConverter extends HttpServlet {
         OutputStream output = resp.getOutputStream();
 
         String html = new BufferedReader(new InputStreamReader(fileContent, "UTF-8")).lines().collect(Collectors.joining("\n"));
-
         PdfRendererBuilder builder = new PdfRendererBuilder();
-        initLogging(req, builder, logging);
+        initLogging(req, builder, loggingKey);
         builder.useCacheStore(PdfRendererBuilder.CacheStore.PDF_FONT_METRICS, fsCacheEx);
         AutoFont.toBuilder(builder, fonts);
         builder.useFastMode();
         builder.usePdfAConformance(PdfRendererBuilder.PdfAConformance.PDFA_1_A);
-        builder.withHtmlContent(html, PDFConverter.class.getResource("/html/").toString());
         try (InputStream colorProfile = PDFConverter.class.getResourceAsStream("/colorspaces/sRGB.icc")) {
             byte[] colorProfileBytes = IOUtils.toByteArray(colorProfile);
             builder.useColorProfile(colorProfileBytes);
         }
         builder.toStream(output);
-        try {
-            builder.run();
-        } catch (XRRuntimeException ex) {   // исключение попадает в диагностику
+        if (strict) {
+            builder.withHtmlContent(html, PDFConverter.class.getResource("/html/").toString());
+        } else {
+            org.jsoup.nodes.Document doc = Jsoup.parse(html);
+            org.w3c.dom.Document dom = new W3CDom().fromJsoup(doc);
+            builder.withW3cDocument(dom, PDFConverter.class.getResource("/html/").toString());
         }
-        output.close();
-    }
-
-    private void convertHtml5(HttpServletRequest req, HttpServletResponse resp) 
-            throws IOException, ServletException {
-
-        if (req.getContentType() != null && req.getContentType().startsWith("multipart/form-data")) {
-            req.setAttribute(Request.MULTIPART_CONFIG_ELEMENT, MULTI_PART_CONFIG);
-        }
-        Part filePart = req.getPart("file");
-        final String logging = req.getParameter("logging"); 
-        InputStream fileContent = filePart.getInputStream();
-
-        resp.setContentType("application/pdf");
-        resp.setHeader("Content-disposition", "attachment; filename=\"md.pdf\"");
-        OutputStream output = resp.getOutputStream();
-
-        String html = new BufferedReader(new InputStreamReader(fileContent, "UTF-8")).lines().collect(Collectors.joining("\n"));
-        org.jsoup.nodes.Document doc = Jsoup.parse(html);
-		org.w3c.dom.Document dom = new W3CDom().fromJsoup(doc);
-
-        PdfRendererBuilder builder = new PdfRendererBuilder();
-        initLogging(req, builder, logging);
-        builder.useCacheStore(PdfRendererBuilder.CacheStore.PDF_FONT_METRICS, fsCacheEx);
-        AutoFont.toBuilder(builder, fonts);
-        builder.useFastMode();
-        builder.usePdfAConformance(PdfRendererBuilder.PdfAConformance.PDFA_1_A);
-        builder.withW3cDocument(dom, PDFConverter.class.getResource("/html/").toString());
-        try (InputStream colorProfile = PDFConverter.class.getResourceAsStream("/colorspaces/sRGB.icc")) {
-            byte[] colorProfileBytes = IOUtils.toByteArray(colorProfile);
-            builder.useColorProfile(colorProfileBytes);
-        }
-        builder.toStream(output);
         try {
             builder.run();
         } catch (XRRuntimeException ex) {   // исключение попадает в диагностику
@@ -245,11 +213,11 @@ public class PDFConverter extends HttpServlet {
 
         String key = req.getServletPath().substring(5);
         List<Diagnostic> l = lastLog.get(key);
-        lastLog.remove(key);
         out.print("<p>Ключ лога - "+key+"</p>");
         if (l == null) {
-            out.print("<p>Логирование выключено</p>");
+            out.print("<p>Лог пустой. Логирование выключено или лог уже вычитан</p>");
         } else {
+            lastLog.remove(key);
             for (Diagnostic diag : l) {
                 if (diag.getLevel() != Level.FINEST && diag.getLevel() != Level.FINER) {
                     out.print(diag.getLevel());
